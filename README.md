@@ -184,13 +184,14 @@ Custom-design request flow via draft orders.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
+| `POST` | `/store/uploads` | Customer | Upload inspiration image(s) (multipart, `files` field) |
 | `POST` | `/store/inspiration` | Customer | Submit design request |
 | `GET` | `/store/inspiration` | Customer | My design requests |
 
 Body for POST:
 ```json
 {
-  "image_url": "https://...uploaded-image-url",
+  "image_url": "http://localhost:9000/static/inspiration-...",
   "garment_type": "Lehenga",
   "fabric": "Silk",
   "color": "Red",
@@ -200,6 +201,8 @@ Body for POST:
   "notes": "Want a matching dupatta"
 }
 ```
+
+> `image_url` must be a hosted URL, not raw file data. Upload via `POST /store/uploads` first (multipart, `files` field), then send the returned URL here.
 
 ### Store Pickup (BOPIS)
 

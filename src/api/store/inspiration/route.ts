@@ -12,7 +12,7 @@ import type {
  * specs in metadata â€” the merchant reviews and prices it in admin.
  *
  * Body (JSON):
- *   - image_url: string (upload the file first, then send its URL)
+ *   - image_url: string (upload via POST /store/uploads first, then send the returned URL)
  *   - garment_type: string (e.g., "Lehenga")
  *   - fabric?, color?, embroidery?, occasion?, budget?, notes?: string
  *

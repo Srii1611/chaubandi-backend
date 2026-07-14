@@ -13,8 +13,11 @@ pnpm-lock.yaml
 .dist/
 .medusa/
 
-# Uploads
-uploads/
+# Local file-storage output (dev). Leading slash anchors these to the repo
+# root so they do NOT match the src/api/store/uploads API route directory.
+# The local file provider writes to static/ (see medusa-config.ts upload_dir).
+/uploads/
+/static/
 
 # Logs
 *.log
