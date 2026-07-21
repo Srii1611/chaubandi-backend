@@ -4,11 +4,30 @@ loadEnv(process.env.NODE_ENV || "development", process.cwd());
 
 const isDev = process.env.NODE_ENV !== "production";
 
-// File module: use R2 if credentials provided, else local storage
-const useR2 =
-  process.env.R2_ACCOUNT_ID &&
-  process.env.R2_ACCESS_KEY_ID &&
-  !process.env.R2_ACCOUNT_ID.includes("replace_me");
+// File module: use R2 when *every* value it needs is present, else local disk.
+// All four are required — a partial config used to pass this check and then
+// fail at upload time, or silently serve files from an undefined public URL.
+const r2Vars = [
+  process.env.R2_ACCOUNT_ID,
+  process.env.R2_ACCESS_KEY_ID,
+  process.env.R2_SECRET_ACCESS_KEY,
+  process.env.R2_PUBLIC_URL,
+];
+const useR2 = r2Vars.every(
+  (v) => !!v && !v.includes("replace_me") && !v.includes("your_")
+);
+
+if (!useR2 && r2Vars.some((v) => !!v)) {
+  console.warn(
+    "[chaubandi] R2 is partially configured — falling back to local disk. " +
+      "R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_PUBLIC_URL are all required."
+  );
+}
+if (!useR2 && process.env.NODE_ENV === "production") {
+  console.warn(
+    "[chaubandi] Using local disk for uploads in production — files are LOST on redeploy. Configure R2."
+  );
+}
 
 const fileModuleConfig = {
   resolve: "@medusajs/file",
@@ -32,7 +51,12 @@ const fileModuleConfig = {
             id: "local",
             options: {
               upload_dir: "static",
-              backend_url: "http://localhost:9000/static",
+              // Derived from the public URL, not hardcoded: local-provider
+              // files are stored with absolute URLs, so a hardcoded localhost
+              // here bakes unreachable links into every uploaded file.
+              backend_url: `${(
+                process.env.MEDUSA_BACKEND_URL || "http://localhost:9000"
+              ).replace(/\/$/, "")}/static`,
             },
           },
     ],
