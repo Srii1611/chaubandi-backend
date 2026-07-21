@@ -17,8 +17,15 @@ class AppointmentService extends MedusaService({
     startDate: Date = new Date(),
     weeksAhead: number = 4
   ): Promise<AvailableSlotDTO[]> {
-    const availableDays = process.env.APPOINTMENT_AVAILABLE_DAYS
-      ? process.env.APPOINTMENT_AVAILABLE_DAYS.split(",").map(Number)
+    // APPOINTMENT_DAYS is the documented name; APPOINTMENT_AVAILABLE_DAYS is
+    // the original one, still honoured so existing .env files keep working.
+    const daysEnv =
+      process.env.APPOINTMENT_DAYS || process.env.APPOINTMENT_AVAILABLE_DAYS;
+    const availableDays = daysEnv
+      ? daysEnv
+          .split(",")
+          .map((d) => parseInt(d.trim(), 10))
+          .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
       : [5]; // Default: Friday only (0=Sun, 5=Fri)
     const startHour = parseInt(process.env.APPOINTMENT_START_HOUR || "10", 10);
     const endHour = parseInt(process.env.APPOINTMENT_END_HOUR || "18", 10);
@@ -45,9 +52,18 @@ class AppointmentService extends MedusaService({
       )
     );
 
-    // Generate slots
-    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      if (!availableDays.includes(d.getDay())) continue;
+    // Generate slots. Weekday and date string are both read in UTC: the date
+    // label comes from toISOString(), so testing the *local* weekday would
+    // shift a Friday slot onto the Saturday label for any server west of UTC.
+    const cursor = new Date(
+      Date.UTC(
+        startDate.getUTCFullYear(),
+        startDate.getUTCMonth(),
+        startDate.getUTCDate()
+      )
+    );
+    for (let d = cursor; d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
+      if (!availableDays.includes(d.getUTCDay())) continue;
 
       const dateStr = d.toISOString().split("T")[0];
 

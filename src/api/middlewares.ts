@@ -11,7 +11,7 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB per file
-    files: 3,
+    files: 5,
   },
 });
 
@@ -23,7 +23,7 @@ const uploadInspirationImages = (
   res: MedusaResponse,
   next: MedusaNextFunction
 ) => {
-  upload.array("files", 3)(req as any, res as any, (err: unknown) => {
+  upload.array("files", 5)(req as any, res as any, (err: unknown) => {
     if (err instanceof multer.MulterError) {
       // 413 Payload Too Large for oversized files, 400 for everything else
       // (too many files, unexpected field, etc.).
@@ -61,6 +61,11 @@ export default defineMiddlewares({
     },
     {
       matcher: /^\/store\/measurements$/,
+      middlewares: [authenticate("customer", ["session", "bearer"])],
+    },
+    {
+      // Canonical measurements path (the one above is the legacy alias).
+      matcher: /^\/store\/customers\/me\/measurements$/,
       middlewares: [authenticate("customer", ["session", "bearer"])],
     },
     {

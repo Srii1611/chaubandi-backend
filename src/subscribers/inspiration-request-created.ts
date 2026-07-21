@@ -17,8 +17,10 @@ export default async function inspirationRequestHandler({
 
   const { data: draftOrder } = event;
 
-  // Only notify for inspiration requests
-  if (draftOrder.metadata?.type !== "inspiration_request") {
+  // Only notify for custom-design work — both the legacy /store/inspiration
+  // shape and the newer /store/custom-design-requests shape.
+  const requestTypes = ["inspiration_request", "custom_design_request"];
+  if (!requestTypes.includes(draftOrder.metadata?.type)) {
     return;
   }
 
@@ -30,6 +32,33 @@ export default async function inspirationRequestHandler({
 
   const meta = draftOrder.metadata;
 
+  // The two request shapes carry overlapping-but-different fields; render
+  // whatever is present rather than a fixed list full of "Not specified".
+  const images: string[] = Array.isArray(meta.image_urls)
+    ? meta.image_urls
+    : meta.image_url
+    ? [meta.image_url]
+    : [];
+
+  const rows: [string, string | null][] = [
+    ["Name", meta.name],
+    ["Email", meta.email],
+    ["Phone", meta.phone],
+    ["Garment Type", meta.garment_type],
+    ["Fabric", meta.fabric],
+    ["Color", meta.color],
+    ["Embroidery", meta.embroidery],
+    ["Occasion", meta.occasion],
+    ["Event Date", meta.event_date],
+    ["Budget", meta.budget_range || meta.budget],
+    ["Notes", meta.notes],
+  ];
+  const present = rows.filter(([, value]) => value);
+
+  const adminUrl = `${
+    process.env.MEDUSA_BACKEND_URL || "http://localhost:9000"
+  }/app`;
+
   try {
     await notificationService.createNotifications({
       to: ownerEmail,
@@ -40,24 +69,35 @@ export default async function inspirationRequestHandler({
         draft_order_id: draftOrder.id,
         customer_id: meta.customer_id,
         garment_type: meta.garment_type,
-        fabric: meta.fabric || "Not specified",
-        color: meta.color || "Not specified",
-        embroidery: meta.embroidery || "Not specified",
         occasion: meta.occasion || "Not specified",
-        budget: meta.budget || "Not specified",
         notes: meta.notes || "None",
-        image_url: meta.image_url,
-        text: `New custom design request received:\n\nGarment: ${meta.garment_type}\nFabric: ${meta.fabric || "N/A"}\nColor: ${meta.color || "N/A"}\nOccasion: ${meta.occasion || "N/A"}\nBudget: ${meta.budget || "N/A"}\nNotes: ${meta.notes || "None"}\n\nView image: ${meta.image_url}\n\nLog in to the admin dashboard to review and price.`,
+        image_urls: images,
+        image_url: images[0] || null,
+        text: [
+          "New custom design request received:",
+          "",
+          ...present.map(([label, value]) => `${label}: ${value}`),
+          "",
+          ...(images.length
+            ? [`Reference images:`, ...images]
+            : ["No reference images attached."]),
+          "",
+          "Log in to the admin dashboard to review and price.",
+        ].join("\n"),
         html: `<h2>New Custom Design Request</h2>
-<p><strong>Garment Type:</strong> ${meta.garment_type}</p>
-<p><strong>Fabric:</strong> ${meta.fabric || "Not specified"}</p>
-<p><strong>Color:</strong> ${meta.color || "Not specified"}</p>
-<p><strong>Embroidery:</strong> ${meta.embroidery || "Not specified"}</p>
-<p><strong>Occasion:</strong> ${meta.occasion || "Not specified"}</p>
-<p><strong>Budget:</strong> ${meta.budget || "Not specified"}</p>
-<p><strong>Notes:</strong> ${meta.notes || "None"}</p>
-<p><strong>Reference Image:</strong> <a href="${meta.image_url}">View Image</a></p>
-<p><a href="http://localhost:9000/app">Open Admin Dashboard</a></p>`,
+${present
+  .map(([label, value]) => `<p><strong>${label}:</strong> ${value}</p>`)
+  .join("\n")}
+<p><strong>Reference Images:</strong> ${
+          images.length
+            ? images
+                .map(
+                  (url, i) => `<a href="${url}">Image ${i + 1}</a>`
+                )
+                .join(" · ")
+            : "None attached"
+        }</p>
+<p><a href="${adminUrl}">Open Admin Dashboard</a></p>`,
       },
     });
 

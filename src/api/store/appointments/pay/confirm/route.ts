@@ -47,6 +47,7 @@ export async function POST(req: AuthenticatedMedusaRequest, res: MedusaResponse)
   const stripeKey = process.env.STRIPE_API_KEY;
   if (!stripeKey || stripeKey.includes("replace_me")) {
     return res.status(503).json({
+      code: "payments_not_configured",
       message: "Payments are not configured yet (STRIPE_API_KEY missing).",
     });
   }

@@ -8,7 +8,7 @@ import { Modules } from "@medusajs/framework/utils";
  * POST /store/uploads
  * Customer-facing file upload for the "Design Your Dream Outfit"
  * inspiration flow. Accepts multipart/form-data with a `files` field
- * (up to 3 images, 10MB each). Stores via the configured File Module
+ * (up to 5 images, 10MB each). Stores via the configured File Module
  * provider (local in dev, Cloudflare R2 in production) and returns
  * the public URLs — the client then passes a URL as `image_url` to
  * POST /store/inspiration.
