@@ -12,6 +12,8 @@
   "scripts": {
     "build": "medusa build",
     "seed": "medusa exec ./src/scripts/seed.ts",
+    "seed:catalog": "medusa exec ./src/scripts/seed-catalog.ts",
+    "audit:placeholders": "medusa exec ./src/scripts/audit-placeholders.ts",
     "start": "medusa start",
     "dev": "medusa develop",
     "db:migrate": "medusa db:migrate",

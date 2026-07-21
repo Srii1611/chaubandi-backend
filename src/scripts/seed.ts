@@ -334,6 +334,20 @@ export default async function seedData({ container }: { container: any }) {
     await regionModuleService.listRegions({ name: "United States" })
   )[0];
   if (!region) {
+    // Stripe is only registered when a real STRIPE_API_KEY is present
+    // (see medusa-config.ts), so only attach it to the region if it exists —
+    // otherwise the seed would fail on a keyless install.
+    const paymentModuleService = container.resolve(Modules.PAYMENT);
+    const providers = await paymentModuleService.listPaymentProviders({});
+    const paymentProviderIds = providers
+      .map((p: any) => p.id)
+      .filter((id: string) => id.startsWith("pp_stripe"));
+    if (paymentProviderIds.length === 0) {
+      logger.warn(
+        "⚠️  No Stripe payment provider registered — creating the region without one. Re-run after setting STRIPE_API_KEY."
+      );
+    }
+
     const { result: regions } = await createRegionsWorkflow(container).run({
       input: {
         regions: [
@@ -341,7 +355,7 @@ export default async function seedData({ container }: { container: any }) {
             name: "United States",
             currency_code: "usd",
             countries: ["us"],
-            payment_providers: ["pp_stripe_stripe"],
+            payment_providers: paymentProviderIds,
           },
         ],
       },
