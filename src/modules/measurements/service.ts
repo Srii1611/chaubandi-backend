@@ -1,18 +1,23 @@
 import { MedusaService } from "@medusajs/framework/utils";
 import { MeasurementModel } from "./models/measurement";
-import { CreateMeasurementDTO, UpdateMeasurementDTO, MeasurementDTO } from "./types";
+import {
+  CreateMeasurementDTO,
+  MeasurementDTO,
+  MEASUREMENT_NUMERIC_FIELDS,
+} from "./types";
 
 /**
  * Measurement Service
  * CRUD for per-customer body measurements.
- * Customers manage their own; admin confirms for stitching.
+ * Customers manage their own; the owner confirms them before stitching.
  */
 class MeasurementService extends MedusaService({
   Measurement: MeasurementModel,
 }) {
   /**
-   * Create or update measurements for a customer.
-   * If measurements already exist, updates them.
+   * Create or update the measurements for a customer. One row per customer:
+   * fields omitted from `data` keep their stored value, so the storefront can
+   * PATCH a single number without resending the whole chart.
    */
   async upsertForCustomer(
     customerId: string,
@@ -22,44 +27,41 @@ class MeasurementService extends MedusaService({
       { customer_id: customerId },
       { take: 1 }
     );
+    const current = existing[0] as any;
+
+    const values: Record<string, any> = {};
+    for (const field of MEASUREMENT_NUMERIC_FIELDS) {
+      const incoming = (data as any)[field];
+      values[field] =
+        incoming !== undefined ? incoming : current ? current[field] : null;
+    }
+    values.sleeve_style =
+      data.sleeve_style !== undefined
+        ? data.sleeve_style
+        : current
+        ? current.sleeve_style
+        : null;
+    values.unit = data.unit || current?.unit || "in";
+    values.source = data.source || current?.source || "manual";
+    values.notes =
+      data.notes !== undefined ? data.notes : current ? current.notes : null;
+    // Any edit invalidates the owner's confirmation.
+    values.confirmed = false;
 
     // Generated create/update methods return a single object for single
     // input (an array only for array input).
-    if (existing.length > 0) {
-      // Update existing
+    if (current) {
       const updated = await this.updateMeasurements({
-        id: existing[0].id,
-        bust: data.bust ?? existing[0].bust,
-        waist: data.waist ?? existing[0].waist,
-        hips: data.hips ?? existing[0].hips,
-        shoulder: data.shoulder ?? existing[0].shoulder,
-        length: data.length ?? existing[0].length,
-        sleeve: data.sleeve ?? existing[0].sleeve,
-        inseam: data.inseam ?? existing[0].inseam,
-        unit: data.unit || existing[0].unit,
-        source: data.source || existing[0].source,
-        notes: data.notes !== undefined ? data.notes : existing[0].notes,
-        confirmed: false, // Reset confirmation on update
+        id: current.id,
+        ...values,
       });
       return updated as unknown as MeasurementDTO;
     }
 
-    // Create new
     const created = await this.createMeasurements({
       customer_id: customerId,
-      bust: data.bust ?? null,
-      waist: data.waist ?? null,
-      hips: data.hips ?? null,
-      shoulder: data.shoulder ?? null,
-      length: data.length ?? null,
-      sleeve: data.sleeve ?? null,
-      inseam: data.inseam ?? null,
-      unit: data.unit || "in",
-      source: data.source || "manual",
-      confirmed: false,
-      notes: data.notes || null,
+      ...values,
     });
-
     return created as unknown as MeasurementDTO;
   }
 
