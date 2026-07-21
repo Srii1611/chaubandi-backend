@@ -4,7 +4,10 @@ builder = "NIXPACKS"
 # package.json — but no node_modules, so it needs its own install step. Without
 # the second `npm ci` the container starts and immediately dies on a missing
 # dependency.
-buildCommand = "npm ci && npm run build && cd .medusa/server && npm ci --omit=dev"
+# `npm ci` for the root (lockfile is committed), but `npm install` inside
+# .medusa/server — the build output ships a package.json with no lockfile, and
+# `npm ci` refuses to run without one.
+buildCommand = "npm ci && npm run build && cd .medusa/server && npm install --omit=dev --no-audit --no-fund"
 
 [deploy]
 # Migrations run on every deploy: they are idempotent, and this keeps the
