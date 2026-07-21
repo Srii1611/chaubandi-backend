@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
-package-lock.json
+# package-lock.json is committed: deploys use `npm ci`, which needs it and
+# fails without a lockfile that matches package.json exactly.
 yarn.lock
 pnpm-lock.yaml
 
