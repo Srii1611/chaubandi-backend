@@ -1,12 +1,11 @@
 {
-  "include": ["./src/**/*"],
+  "include": ["./src/**/*", "./medusa-config.ts"],
   "exclude": ["./src/admin/**/*", "node_modules"],
   "compilerOptions": {
     "target": "ES2022",
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "baseUrl": ".",
-    "rootDir": "./src",
     "outDir": "./.medusa/server",
     "paths": { "~/*": ["./src/*"] },
     "jsx": "react-jsx",
@@ -16,7 +15,6 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "declaration": true,
-    "sourceMap": true,
-    "emitDeclarationOnly": true
+    "sourceMap": true
   }
 }
