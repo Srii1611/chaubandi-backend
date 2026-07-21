@@ -1,0 +1,16 @@
+# Keep the build context small — a big context is itself a slow upload, and
+# copying node_modules in would defeat the cached install layer.
+node_modules
+.medusa
+dist
+.git
+.env
+.env.*
+!.env.template
+static
+uploads
+*.log
+docs
+coverage
+.vscode
+.idea

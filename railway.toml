@@ -1,23 +1,15 @@
 [build]
-builder = "NIXPACKS"
-# `medusa build` emits a self-contained server into .medusa/server with its own
-# package.json — but no node_modules, so it needs its own install step. Without
-# the second `npm ci` the container starts and immediately dies on a missing
-# dependency.
-# `npm ci` for the root (lockfile is committed), but `npm install` inside
-# .medusa/server — the build output ships a package.json with no lockfile, and
-# `npm ci` refuses to run without one.
-# `npm ci` needs package.json and package-lock.json in perfect sync and fails
-# the whole deploy on any drift. Falling back to `npm install` means a stale
-# lockfile costs a slower build instead of an outage.
-buildCommand = "(npm ci --no-audit --no-fund || npm install --no-audit --no-fund) && npm run build && cd .medusa/server && npm install --omit=dev --no-audit --no-fund"
+# Dockerfile rather than Nixpacks: the Nixpacks builder hung silently in the
+# npm install phase for ~20 minutes across two separate builder instances.
+# The Dockerfile pins Node, installs the native-build toolchain that some
+# transitive dependencies need, and caches the dependency layer so repeat
+# builds are fast.
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
-# Migrations run on every deploy: they are idempotent, and this keeps the
-# schema in step with the code that was just shipped.
-# `medusa start` binds every interface and honours $PORT, which Railway sets.
-# -H 0.0.0.0 is explicit so the binding can't regress behind a HOST env var.
-startCommand = "cd .medusa/server && npx medusa db:migrate && npm run start -- -H 0.0.0.0"
+# Start command and migrations live in the Dockerfile CMD — setting
+# startCommand here would override it.
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
