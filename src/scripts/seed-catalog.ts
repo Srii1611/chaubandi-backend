@@ -537,6 +537,7 @@ export default async function seedCatalog({ container }: { container: any }) {
   const perCategory: Record<string, number> = {};
   let created = 0;
   let refreshed = 0;
+  let reimaged = 0;
 
   for (const key of CATEGORY_ORDER) {
     const spec = CATEGORY_CONFIG[key];
@@ -557,15 +558,36 @@ export default async function seedCatalog({ container }: { container: any }) {
         handle: product.handle,
       });
       if (existing.length > 0) {
-        // Already seeded: refresh the copy fields in place so edits to the
-        // templates (and any previously mis-encoded text) propagate without
-        // needing the catalog to be torn down. Variants and images are left
-        // alone — they are keyed by SKU and unchanged by a copy edit.
-        await productModuleService.updateProducts(existing[0].id, {
+        // Already seeded: refresh in place so template edits (and any
+        // previously mis-encoded text) propagate without tearing the catalog
+        // down. Variants are left alone — they are keyed by SKU and unchanged
+        // by a copy edit.
+        const current = existing[0] as any;
+        const update: Record<string, any> = {
           title: product.title,
           description: product.description,
           metadata: product.metadata,
-        });
+        };
+
+        // Image URLs are absolute and were stored against whatever
+        // MEDUSA_BACKEND_URL pointed at when the catalog was first seeded — so
+        // a catalog seeded on a laptop carries localhost links that resolve
+        // nowhere else. Re-point them, but ONLY for placeholder artwork: real
+        // photography must never be overwritten by a re-run.
+        const currentUrls: string[] = (current.images || []).map((i: any) => i.url);
+        const allPlaceholders =
+          currentUrls.length > 0 &&
+          currentUrls.every((u) => u.includes("/static/placeholders/"));
+        const wanted = product.images.map((i) => i.url);
+        if (
+          allPlaceholders &&
+          currentUrls.join("|") !== wanted.join("|")
+        ) {
+          update.images = wanted.map((url) => ({ url }));
+          reimaged++;
+        }
+
+        await productModuleService.updateProducts(current.id, update);
         refreshed++;
         continue;
       }
@@ -599,12 +621,14 @@ export default async function seedCatalog({ container }: { container: any }) {
   logger.info("");
   logger.info("=== SEED COMPLETE ===");
   logger.info(`Publishable API Key: ${apiKey?.token ?? "(run `npm run seed`)"}`);
-  logger.info(`Backend URL: ${BACKEND_URL}`);
+  logger.info(`Backend URL: ${BACKEND_URL}   <- image URLs are built from this`);
   logger.info("Products seeded:");
   for (const key of CATEGORY_ORDER) {
     logger.info(`  ${key}: ${perCategory[key]}`);
   }
-  logger.info(`Total: ${total}  (created ${created}, refreshed ${refreshed})`);
+  logger.info(
+    `Total: ${total}  (created ${created}, refreshed ${refreshed}, images re-pointed ${reimaged})`
+  );
   logger.info(
     `Collections: ${OCCASION_COLLECTIONS.length} (${OCCASION_COLLECTIONS.map(
       (c) => c.handle
