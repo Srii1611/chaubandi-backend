@@ -58,9 +58,22 @@ function r2Endpoint(): string {
   return `https://${raw}.r2.cloudflarestorage.com`;
 }
 
-/** Public bucket URL, tolerating a missing protocol. */
+/**
+ * Public bucket URL, tolerating a missing protocol but rejecting obvious
+ * nonsense. A value with whitespace, or with more than one "://", is never a
+ * valid URL — usually several things pasted together. Left unchecked it gets
+ * silently prefixed onto every stored image path, so catch it here.
+ */
 function r2PublicUrl(): string {
   const raw = (process.env.R2_PUBLIC_URL || "").trim().replace(/\/+$/, "");
+  const malformed =
+    /\s/.test(raw) || (raw.match(/:\/\//g) || []).length > 1;
+  if (malformed) {
+    throw new Error(
+      `[chaubandi] R2_PUBLIC_URL is malformed: it must be a single URL such as ` +
+        `https://pub-<id>.r2.dev — got ${JSON.stringify(raw)}`
+    );
+  }
   return /^https?:\/\//.test(raw) ? raw : `https://${raw}`;
 }
 
