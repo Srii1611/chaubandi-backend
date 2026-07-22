@@ -23,10 +23,45 @@ if (!useR2 && r2Vars.some((v) => !!v)) {
       "R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_PUBLIC_URL are all required."
   );
 }
+if (useR2) {
+  // Echo the resolved values (never the keys) so a malformed endpoint or
+  // public URL is obvious at boot rather than as an "Invalid URL" from deep
+  // inside the AWS SDK on the first upload.
+  console.log(
+    `[chaubandi] R2 enabled — endpoint ${r2Endpoint()} bucket ${
+      process.env.R2_BUCKET_NAME || "chaubandi-uploads"
+    } public ${r2PublicUrl()}`
+  );
+}
 if (!useR2 && process.env.NODE_ENV === "production") {
   console.warn(
     "[chaubandi] Using local disk for uploads in production — files are LOST on redeploy. Configure R2."
   );
+}
+
+/**
+ * Build the R2 S3 endpoint from whatever was pasted into R2_ACCOUNT_ID.
+ *
+ * Cloudflare's dashboard shows the full "S3 API" URL right next to the
+ * account ID, so it is easy to paste the whole thing. Naively interpolating
+ * that produced "https://https://<id>.r2.cloudflarestorage.com" and the AWS
+ * SDK failed with a bare "Invalid URL" — which says nothing about the cause.
+ * Accept either form.
+ */
+function r2Endpoint(): string {
+  const raw = (process.env.R2_ACCOUNT_ID || "").trim().replace(/\/+$/, "");
+  // Already a URL, or a bare hostname: keep the host, force https.
+  if (raw.includes("://") || raw.includes(".")) {
+    const host = raw.replace(/^https?:\/\//, "").split("/")[0];
+    return `https://${host}`;
+  }
+  return `https://${raw}.r2.cloudflarestorage.com`;
+}
+
+/** Public bucket URL, tolerating a missing protocol. */
+function r2PublicUrl(): string {
+  const raw = (process.env.R2_PUBLIC_URL || "").trim().replace(/\/+$/, "");
+  return /^https?:\/\//.test(raw) ? raw : `https://${raw}`;
 }
 
 const fileModuleConfig = {
@@ -38,11 +73,11 @@ const fileModuleConfig = {
             resolve: "@medusajs/file-s3",
             id: "r2",
             options: {
-              file_url: process.env.R2_PUBLIC_URL,
+              file_url: r2PublicUrl(),
               access_key_id: process.env.R2_ACCESS_KEY_ID,
               secret_access_key: process.env.R2_SECRET_ACCESS_KEY,
               region: "auto",
-              endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+              endpoint: r2Endpoint(),
               bucket: process.env.R2_BUCKET_NAME || "chaubandi-uploads",
             },
           }
