@@ -365,19 +365,53 @@ function placeholderSvg(spec: CategorySpec): string {
 </svg>`;
 }
 
-function writePlaceholderImages(logger: Logger): Record<CategoryKey, string> {
-  const dir = path.join(process.cwd(), "static", "placeholders");
-  fs.mkdirSync(dir, { recursive: true });
-
+/**
+ * Store the placeholder artwork through the File Module, so it lands wherever
+ * the configured provider points — R2 in production, local disk in dev.
+ *
+ * Writing to the filesystem directly (as this used to) puts the files on the
+ * container's own disk, which is wiped on every deploy: the URLs stay valid
+ * while the images 404. Going through the module also means these behave
+ * exactly like real product photography when it replaces them.
+ */
+async function uploadPlaceholderImages(
+  container: any,
+  logger: Logger
+): Promise<Record<CategoryKey, string>> {
+  const fileModuleService = container.resolve(Modules.FILE);
   const urls = {} as Record<CategoryKey, string>;
+
   for (const key of CATEGORY_ORDER) {
     const spec = CATEGORY_CONFIG[key];
-    const filename = `${key}.svg`;
-    fs.writeFileSync(path.join(dir, filename), placeholderSvg(spec), "utf8");
-    urls[key] = `${BACKEND_URL}/static/placeholders/${filename}`;
+    const svg = placeholderSvg(spec);
+    try {
+      // content must be base64 in v2.17.2 — the providers round-trip it
+      // through Buffer.from(content, "base64").
+      const [created] = await fileModuleService.createFiles([
+        {
+          filename: `placeholder-${key}.svg`,
+          mimeType: "image/svg+xml",
+          content: Buffer.from(svg, "utf8").toString("base64"),
+          access: "public",
+        },
+      ]);
+      urls[key] = created.url;
+    } catch (e: any) {
+      // Fall back to the old on-disk path rather than failing the whole seed;
+      // the catalog is still usable, the images just won't survive a redeploy.
+      logger.warn(
+        `Could not upload placeholder for ${key} (${e.message}) — falling back to local disk.`
+      );
+      const dir = path.join(process.cwd(), "static", "placeholders");
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, `${key}.svg`), svg, "utf8");
+      urls[key] = `${BACKEND_URL}/static/placeholders/${key}.svg`;
+    }
   }
+
+  const host = Object.values(urls)[0]?.split("/")[2] ?? "(unknown)";
   logger.info(
-    `🖼️  Wrote ${CATEGORY_ORDER.length} placeholder images to static/placeholders/`
+    `🖼️  Stored ${CATEGORY_ORDER.length} placeholder images via the file provider (host: ${host})`
   );
   return urls;
 }
@@ -531,7 +565,7 @@ export default async function seedCatalog({ container }: { container: any }) {
   logger.info(`✅ ${CATEGORY_ORDER.length} categories ready`);
 
   // ─── Placeholder imagery ───
-  const imageUrls = writePlaceholderImages(logger);
+  const imageUrls = await uploadPlaceholderImages(container, logger);
 
   // ─── Products ───
   const perCategory: Record<string, number> = {};
@@ -579,9 +613,14 @@ export default async function seedCatalog({ container }: { container: any }) {
         // nowhere else. Re-point them, but ONLY for placeholder artwork: real
         // photography must never be overwritten by a re-run.
         const currentUrls: string[] = (current.images || []).map((i: any) => i.url);
+        // Matches both storage layouts: the old on-disk path and the
+        // file-provider filename (placeholder-<category>.svg) used since these
+        // moved to R2. Real photography matches neither, so it is never
+        // overwritten.
+        const isPlaceholderUrl = (u: string) =>
+          u.includes("/static/placeholders/") || u.includes("placeholder-");
         const allPlaceholders =
-          currentUrls.length > 0 &&
-          currentUrls.every((u) => u.includes("/static/placeholders/"));
+          currentUrls.length > 0 && currentUrls.every(isPlaceholderUrl);
         const wanted = product.images.map((i) => i.url);
         if (
           allPlaceholders &&
