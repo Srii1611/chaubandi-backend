@@ -554,9 +554,13 @@ export default async function seedCatalog({ container }: { container: any }) {
         imageUrls[key]
       );
 
-      const existing = await productModuleService.listProducts({
-        handle: product.handle,
-      });
+      // `relations` is required: without it the images array comes back
+      // undefined, and the placeholder check below silently skips every
+      // product instead of re-pointing it.
+      const existing = await productModuleService.listProducts(
+        { handle: product.handle },
+        { relations: ["images"] }
+      );
       if (existing.length > 0) {
         // Already seeded: refresh in place so template edits (and any
         // previously mis-encoded text) propagate without tearing the catalog
